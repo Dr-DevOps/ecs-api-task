@@ -302,7 +302,57 @@ resource "aws_iam_role" "ecsInstanceRole" {
 EOF
 }
 
-resource "aws_iam_role_policy_attachment" "ecsInstanceRole" {
-    role = "${aws_iam_role.ecsInstanceRole.name}"
-    policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+## IAM role for ECS task execution
+resource "aws_iam_role" "ecs_execution_role" {
+  name = "ECSExecutionRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      },
+    ]
+  })
+
+  tags = {
+    Name = "ECSExecutionRole"
+  }
+}
+
+data "aws_iam_policy_document" "ecs_execution" {
+  statement {
+    actions = [
+      "ecr:GetAuthorizationToken",
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "ssm:GetParameter",
+      "ssm:GetParameters"
+    ]
+    resources = ["*"]
+    effect    = "Allow"
+  }
+}
+
+resource "aws_iam_policy" "ecs_execution" {
+  name   = "ECSTaskExecution"
+  path   = "/"
+  policy = data.aws_iam_policy_document.ecs_execution.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = aws_iam_policy.ecs_execution.arn
+}
+
+output "ecs_task_execution_role" {
+  value = aws_iam_policy.ecs_execution.arn
 }
